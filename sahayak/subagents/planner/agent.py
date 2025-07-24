@@ -16,7 +16,7 @@ curriculum_planner = Agent(
         "An AI assistant specialized in yearly curriculum planning, calendar integration, "
         "and resource allocation based on local context."
     ),
-    tools=[rag_query],
+    tools=[rag_query, memorize_dict],
     instruction=prompt.CURRICULUM_PLANNER_INSTR,
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True,
@@ -29,7 +29,7 @@ lesson_designer = Agent(
         "An AI assistant specialized in creating detailed lesson plans, interactive slides, "
         "and teaching aids."
     ),
-    tools=[ask_vertex_retrieval],
+    tools=[rag_query],
     instruction=prompt.LESSON_DESIGNER_INSTR,
     disallow_transfer_to_parent=True,
     disallow_transfer_to_peers=True,
