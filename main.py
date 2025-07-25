@@ -4,6 +4,8 @@ import uvicorn
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from dotenv import load_dotenv
+# fetch create_slide_images_test
+from sahayak.tools.image import create_slide_images_test
 
 load_dotenv()
 
@@ -21,7 +23,7 @@ print(f"gs://{os.environ.get('GOOGLE_CLOUD_STORAGE_BUCKET')}/artifacts")
 app: FastAPI = get_fast_api_app(
     agents_dir=AGENT_DIR,
     # session_service_uri=SESSION_SERVICE_URI,
-    artifact_service_uri=f"gs://{os.environ.get('GOOGLE_CLOUD_STORAGE_BUCKET')}/artifacts",
+    # artifact_service_uri=f"gs://{os.environ.get('GOOGLE_CLOUD_STORAGE_BUCKET')}/artifacts",
     allow_origins=ALLOWED_ORIGINS,
     web=SERVE_WEB_INTERFACE,
 )
@@ -30,6 +32,12 @@ app: FastAPI = get_fast_api_app(
 @app.get("/hello")
 async def read_root():
     return {"Hello": "World"}
+
+
+@app.post("/create_slide_images_test")
+async def create_slide_images_test_endpoint():
+    return create_slide_images_test()
+
 
 if __name__ == "__main__":
     # Use the PORT environment variable provided by Cloud Run, defaulting to 8080

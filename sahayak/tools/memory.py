@@ -44,9 +44,16 @@ def memorize(key: str, value: str, tool_context: ToolContext):
     """
     print(f"Memorizing {key}: {value}")
     mem_dict = tool_context.state
-    # print(mem_dict["symptoms"])
-    mem_dict[key] = value
-    return {"status": f'Stored "{key}": "{value}"'}
+    if value.startswith("```json") and value.endswith("```"):
+        # Extract JSON content between backticks and parse it
+        json_str = value[7:-3].strip()  # Remove ```json and ``` markers
+        try:
+            mem_dict[key] = json.loads(json_str)
+        except json.JSONDecodeError:
+            mem_dict[key] = value
+    else:
+        mem_dict[key] = value
+    return {"status": f'Stored "{key}": {mem_dict[key]}'}
 
 
 def memorize_dict(key: str, value: dict, tool_context: ToolContext):
@@ -64,6 +71,7 @@ def memorize_dict(key: str, value: dict, tool_context: ToolContext):
     mem_dict = tool_context.state
     if key == "current_pets":
         mem_dict[key] = [value]
+
     else:
         mem_dict[key] = value
     return {"status": f'Stored "{key}": "{value}"'}
