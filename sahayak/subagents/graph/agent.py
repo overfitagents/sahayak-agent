@@ -1,23 +1,36 @@
+# sahayak/subagents/graph/agent.py
 from google.adk.agents import Agent
 from sahayak.tools.graph import query_graph
-from sahayak.subagents.graph import prompt
 import re
 
 GRAPH_AGENT_INSTR = """
-You are GraphVisualizer, an educational data analyst that helps teachers understand student performance.
+You are GraphVisualizer, an educational data analyst that helps teachers understand student performance by querying a Neo4j knowledge graph.
 
-When users ask about student performance:
-1. First understand what they want (highest scorer or study teams)
-2. Extract the topic(s) and grade
-3. Set these parameters in your state
-4. Call the query_graph tool
-5. Explain the results clearly
+When users ask about student performance, follow these steps:
 
-Examples of user requests:
-- "Who scored highest in light?" → find highest scorer in light topic
-- "Form study teams for grade 8 in motion and forces" → form complementary teams
+1. **Extract the request details:**
+   - Intent: "find_highest" (for highest scorer) or "form_teams" (for study groups)
+   - Topic(s): the subject area(s) mentioned
+   - Grade: the grade level (if specified)
 
-Always be helpful and explain what the data means for teaching.
+2. **Set these parameters in your tool context state** before calling query_graph:
+   - user_intent: "find_highest" or "form_teams"
+   - topic_a: first topic name
+   - topic_b: second topic name (for team formation)
+   - grade: grade level (if mentioned)
+
+3. **Call query_graph()** - it will automatically read parameters from your state
+
+4. **Explain the results** in teacher-friendly terms
+
+Examples:
+- User: "Who scored highest in light for grade 10?"
+  Your response should find and explain the top performer
+  
+- User: "Form study teams in grade 8 for motion and forces"  
+  Your response should suggest complementary pairs
+
+Focus on providing actionable insights for teaching.
 """
 
 def extract_study_query_params(user_query: str):
@@ -41,13 +54,13 @@ def extract_study_query_params(user_query: str):
     if grade_match:
         result["grade"] = grade_match.group(1)
 
-    # Extract topics
-    topic_patterns = [
-        r"(?:topic\s+|in\s+(?:the\s+)?)([a-zA-Z]+)(?:\s+and\s+([a-zA-Z]+))?",  
-        r"([a-zA-Z]+)\s+and\s+([a-zA-Z]+)"  
+    # Extract topics - try multiple patterns
+    patterns = [
+        r"(?:topic\s+|in\s+(?:the\s+)?)([a-zA-Z]+)(?:\s+and\s+([a-zA-Z]+))?",
+        r"([a-zA-Z]+)\s+and\s+([a-zA-Z]+)"
     ]
     
-    for pattern in topic_patterns:
+    for pattern in patterns:
         match = re.search(pattern, user_query)
         if match:
             result["topic_a"] = match.group(1)
@@ -63,30 +76,7 @@ def extract_study_query_params(user_query: str):
 
     return result
 
-# The agent needs to use a custom handler to set state before calling tool
-# But since you're using Google ADK, let's make sure the instruction is clear:
-
-GRAPH_AGENT_INSTR = """
-You are GraphVisualizer, an educational data analyst. When users ask about student performance:
-
-1. First identify their intent (finding highest scorer or forming teams)
-2. Extract the topic(s) and grade level from their request
-3. **IMPORTANT**: Before calling query_graph, you MUST set these parameters in your state:
-   - user_intent: "find_highest" or "form_teams"  
-   - topic_a: the main topic (required)
-   - topic_b: second topic (for team formation)
-   - grade: grade level (if mentioned)
-4. Then call query_graph() with no parameters
-5. Format the results clearly
-
-Example workflow:
-User: "Who scored highest in light for grade 10?"
-You should set state: {user_intent: "find_highest", topic_a: "light", grade: "10"}
-Then call: query_graph()
-
-The tool will read these parameters from your state automatically.
-"""
-
+# Create the agent
 graph_visualizer = Agent(
     name="graph_visualizer",
     model="gemini-2.5-flash",
