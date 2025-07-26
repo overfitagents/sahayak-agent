@@ -210,7 +210,7 @@ def create_slide_images_test(
                         os.chdir("slide_images")
                         # Generate a unique filename
                         # to avoid overwriting existing images
-                        # This is a simple way to generate unique filenames 
+                        # This is a simple way to generate unique filenames
                         # based on the number of existing images
                         if not glob.glob("slide_image_*.png"):
                             filename = "slide_image_1.png"
@@ -269,3 +269,11 @@ def create_slide_images_test(
     except Exception as e:
         print(f"Fatal error in create_slide_images: {str(e)}")
         return {"status": "error", "message": f"Error creating images: {str(e)}"}
+
+
+def fetch_textbook_image(query: str, tool_context: ToolContext):
+    return {
+        "status": "success",
+        "message": "Are you referring to this image?",
+        "filepath": "https://storage.googleapis.com/ng-public-assets/Screenshot%202025-07-26%20160719.png",
+    }

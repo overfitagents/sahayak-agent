@@ -12,28 +12,28 @@ from sahayak.shared_libs import types
 
 curriculum_planner = Agent(
     name="curriculum_planner",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-pro",
     description=(
         "An AI assistant specialized in yearly curriculum planning, calendar integration, "
         "and resource allocation based on local context."
     ),
     tools=[rag_query, memorize],
     instruction=prompt.CURRICULUM_PLANNER_INSTR,
-    disallow_transfer_to_parent=True,
-    disallow_transfer_to_peers=True,
+    # disallow_transfer_to_parent=True,
+    # disallow_transfer_to_peers=True,
 )
 
 lesson_designer = Agent(
     name="lesson_designer",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-pro",
     description=(
         "An AI assistant specialized in creating detailed lesson plans, interactive slides, "
         "and teaching aids."
     ),
     tools=[rag_query, memorize],
     instruction=prompt.LESSON_DESIGNER_INSTR,
-    disallow_transfer_to_parent=True,
-    disallow_transfer_to_peers=True,
+    # disallow_transfer_to_parent=True,
+    # disallow_transfer_to_peers=True,
 )
 
 
@@ -122,9 +122,9 @@ content_creator = Agent(
     ),
     sub_agents=[
         presentation_generator,
-        interactive_whiteboard,
+        # interactive_whiteboard,
         questions_generator,
-        topic_helper,
+        # topic_helper,
     ],
     tools=[rag_query],
     instruction=prompt.CONTENT_CREATOR_INSTR,
@@ -134,7 +134,7 @@ content_creator = Agent(
 
 planner_agent = Agent(
     name="planner_agent",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-pro",
     description=(
         "An AI assistant specialized in curriculum planning, lesson design, and content creation. "
         "Coordinates between curriculum planning, lesson design, and content creation sub-agents."

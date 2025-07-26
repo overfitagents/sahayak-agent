@@ -49,7 +49,8 @@ def memorize(key: str, value: str, tool_context: ToolContext):
         json_str = value[7:-3].strip()  # Remove ```json and ``` markers
         try:
             mem_dict[key] = json.loads(json_str)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON: {str(e)}")
             mem_dict[key] = value
     else:
         mem_dict[key] = value
