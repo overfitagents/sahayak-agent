@@ -41,8 +41,7 @@ async def create_slide_images(
             response_modalities=[Modality.TEXT, Modality.IMAGE]
         )
 
-        updated_slides = []
-        for index, slide in enumerate(slides, 1):
+        async def process_slide(index: int, slide: dict):
             try:
                 print(f"Generating image for slide {index}: {slide.get('content', '')[:50]}...")
 
@@ -56,21 +55,17 @@ async def create_slide_images(
                     if part.inline_data:
                         image_bytes = part.inline_data.data
 
-                        # Create images directory in root if it doesn't exist
                         root_image_dir = "generated_images"
                         if not os.path.exists(root_image_dir):
                             os.makedirs(root_image_dir)
 
-                        # Create unique filename based on slide index
                         filename = f"slide_image_{index}.png"
                         filepath = os.path.join(root_image_dir, filename)
                         print(f"Saving image as {filepath}")
 
-                        # Save image file to root directory
                         with open(filepath, "wb") as f:
                             f.write(image_bytes)
 
-                        # Create artifact for tool context
                         image_artifact = types.Part.from_bytes(
                             data=image_bytes, mime_type="image/png"
                         )
@@ -83,10 +78,14 @@ async def create_slide_images(
                         slide["image_filename"] = filename
                         slide["image_version"] = artifact_version
 
+                return slide
             except Exception as e:
                 print(f"Error processing slide {index}: {str(e)}")
+                return slide
 
-            updated_slides.append(slide)
+        # Process slides in parallel
+        tasks = [process_slide(index, slide) for index, slide in enumerate(slides, 1)]
+        updated_slides = await asyncio.gather(*tasks)
 
         print("Updating slide contents")
         slide_contents["slides"] = updated_slides
