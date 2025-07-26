@@ -5,6 +5,7 @@ from neo4j import AsyncGraphDatabase
 import logging
 import os
 from typing import Optional, List, Dict, Any
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,18 @@ class GraphVisualizer(BaseTool):
             # Allow nested event loops
             nest_asyncio.apply()
             result = asyncio.run(self._run_query(parsed_state))
-            return types.Content(
-                role="tool",
-                parts=[types.Part(text=result)]
-            )
+            if isinstance(result, dict):
+                json_string = json.dumps(result, indent=2) 
+                logger.info(f"🔧 GraphVisualizer.run() returning JSON string: {json_string[:200]}...") 
+                return types.Content(
+                    role="tool",
+                    parts=[types.Part(text=json_string)] 
+                )
+            else:
+                return types.Content(
+                    role="tool",
+                    parts=[types.Part(text=result)]
+                )
         except Exception as e:
             error_msg = f"Query failed: {e}"
             logger.exception("Neo4j query failed")
@@ -134,13 +143,12 @@ class GraphVisualizer(BaseTool):
             return f"🏅 Top 5 students in {parsed_state.topic_a} (Grade {parsed_state.grade}):\n" + "\n".join(rankings)
         return f"No students found for {parsed_state.topic_a} topic in Grade {parsed_state.grade}"
 
-    async def _form_teams(self, session, parsed_state: GraphQueryState) -> str:
-        """Enhanced team formation with better grouping logic."""
+    async def _form_teams(self, session, parsed_state: GraphQueryState) -> Dict[str, Any]:
+        """Enhanced team formation returning structured JSON."""
         if parsed_state.topic_b:
-            # Dual topic: Form teams based on combined performance
+            # Dual topic team formation
             logger.info(f"Forming teams based on {parsed_state.topic_a} + {parsed_state.topic_b}")
-            
-            # Validate topics exist
+
             topic_check = await session.run("""
                 MATCH (t:Topic {grade: $grade})
                 WHERE t.name IN [$topic_a, $topic_b]
@@ -150,18 +158,15 @@ class GraphVisualizer(BaseTool):
                 "topic_b": parsed_state.topic_b.title(),
                 "grade": parsed_state.grade
             })
-            existing_topics = []
-            async for record in topic_check:
-                existing_topics.append(record["topic_name"])
-            
+            existing_topics = [record["topic_name"] async for record in topic_check]
+
             if len(existing_topics) < 2:
                 missing = set([parsed_state.topic_a.title(), parsed_state.topic_b.title()]) - set(existing_topics)
-                return f"Cannot form teams: Topics not found: {', '.join(missing)}"
-            
-            # Find students with scores in both topics
+                return {"error": f"Cannot form teams: Topics not found: {', '.join(missing)}"}
+
             result = await session.run("""
                 MATCH (s:Student)-[r1:SCORED_IN]->(t1:Topic {name: $topic_a, grade: $grade}),
-                      (s)-[r2:SCORED_IN]->(t2:Topic {name: $topic_b, grade: $grade})
+                    (s)-[r2:SCORED_IN]->(t2:Topic {name: $topic_b, grade: $grade})
                 RETURN s.name AS student_name, r1.score AS score_a, r2.score AS score_b
                 ORDER BY (r1.score + r2.score) DESC
                 LIMIT 8
@@ -171,15 +176,13 @@ class GraphVisualizer(BaseTool):
                 "grade": parsed_state.grade
             })
             students = await result.data()
-            
+
             if not students:
-                return f"No students found who have scores for both '{parsed_state.topic_a}' and '{parsed_state.topic_b}' topics"
-                
+                return {"error": f"No students found who have scores for both '{parsed_state.topic_a}' and '{parsed_state.topic_b}'"}
         else:
-            # Single topic: Form teams based on performance in one topic
+            # Single topic team formation
             logger.info(f"Forming teams based on {parsed_state.topic_a} only")
-            
-            # Validate topic exists
+
             topic_check = await session.run("""
                 MATCH (t:Topic {name: $topic_a, grade: $grade})
                 RETURN t.name AS topic_name
@@ -189,9 +192,8 @@ class GraphVisualizer(BaseTool):
             })
             topic_exists = await topic_check.single()
             if not topic_exists:
-                return f"Cannot form teams: Topic '{parsed_state.topic_a}' not found for grade {parsed_state.grade}"
-            
-            # Find students with scores in this topic
+                return {"error": f"Cannot form teams: Topic '{parsed_state.topic_a}' not found for grade {parsed_state.grade}"}
+
             result = await session.run("""
                 MATCH (s:Student)-[r:SCORED_IN]->(t:Topic {name: $topic_a, grade: $grade})
                 RETURN s.name AS student_name, r.score AS score
@@ -202,15 +204,17 @@ class GraphVisualizer(BaseTool):
                 "grade": parsed_state.grade
             })
             students = await result.data()
-            
+
             if not students:
-                return f"No students found with scores for '{parsed_state.topic_a}' topic"
-        
-        # ✅ Enhanced team formation logic
+                return {"error": f"No students found with scores for '{parsed_state.topic_a}' topic"}
+
+        # ✅ Build structured team JSON
         teams = await self._create_balanced_teams(students, parsed_state.topic_b is not None)
-        
-        topic_info = f"{parsed_state.topic_a}{(' and ' + parsed_state.topic_b) if parsed_state.topic_b else ''}"
-        return f"👥 Teams formed based on {topic_info} performance (Grade {parsed_state.grade}):\n{teams}"
+        return {
+            "type": "study_buddy",
+            "teams": teams
+        }
+
 
     async def _create_balanced_teams(self, students: List[Dict], is_dual_topic: bool) -> str:
         """Create balanced teams with better distribution."""
