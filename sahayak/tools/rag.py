@@ -66,7 +66,7 @@ def rag_query(
 
         # Configure retrieval parameters
         rag_retrieval_config = rag.RagRetrievalConfig(
-            top_k=12,
+            top_k=20,
             filter=rag.Filter(vector_distance_threshold=0.6),
         )
 
