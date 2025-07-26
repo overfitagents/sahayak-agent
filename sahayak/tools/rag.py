@@ -1,10 +1,7 @@
 import os
-
-
 from google.adk.tools.retrieval.vertex_ai_rag_retrieval import VertexAiRagRetrieval
 
 from vertexai.preview import rag
-
 from google.adk.tools import ToolContext
 
 from typing import Any
@@ -38,13 +35,12 @@ class DynamicRagRetrieval(VertexAiRagRetrieval):
         print(f"Processed LLM request with updated RAG resources: {self.vertex_rag_store.rag_resources}")
 
 
-
 ask_vertex_retrieval = DynamicRagRetrieval(
     name="retrieve_rag_documentation",
     description=(
         "Use this tool to retrieve documentation and reference materials for the question from the RAG corpus,"
     ),
-    similarity_top_k=20,
+    similarity_top_k=12,
     vector_distance_threshold=0.6,
 )
 
@@ -70,11 +66,10 @@ def rag_query(
 
         # Configure retrieval parameters
         rag_retrieval_config = rag.RagRetrievalConfig(
-            top_k=20,
+            top_k=12,
             filter=rag.Filter(vector_distance_threshold=0.6),
         )
 
-        
         current_grade = tool_context.state.get("current_grade")
         current_grade = current_grade.get("grade", None)
 
