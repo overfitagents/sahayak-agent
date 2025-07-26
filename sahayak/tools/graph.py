@@ -1,139 +1,150 @@
-async def query_graph(tool_context) -> dict:
-    """Debug version that shows exactly what the agent is sending"""
-    from neo4j import GraphDatabase, basic_auth
-    import os
-    
-    print("=== QUERY_GRAPH TOOL CALLED ===")
-    print(f"Full tool_context.state: {tool_context.state}")
-    
-    # List all keys in state
-    print(f"Available keys in state: {list(tool_context.state.keys())}")
-    
-    # Try to find our parameters in various possible locations
-    possible_locations = [
-        tool_context.state,
-        tool_context.state.get('parameters', {}),
-        tool_context.state.get('args', {}),
-    ]
-    
-    for i, location in enumerate(possible_locations):
-        if location and isinstance(location, dict):
-            print(f"Location {i} contents: {location}")
-            if any(key in location for key in ['user_intent', 'topic_a', 'grade']):
-                print(f"Found parameters in location {i}: {location}")
-                break
-    
-    # Original parameter extraction (with fallback debugging)
-    params = tool_context.state
-    user_intent = params.get("user_intent")
-    topic_a = params.get("topic_a") 
-    topic_b = params.get("topic_b")
-    grade = params.get("grade")
-    
-    # Debug: check if parameters exist with different names
-    if not user_intent:
-        # Try alternative names
-        for key in ['intent', 'action', 'task']:
-            user_intent = params.get(key)
-            if user_intent:
-                print(f"Found intent with alternative key '{key}': {user_intent}")
-                break
-    
-    print(f"Final extracted params: intent={user_intent}, topic_a={topic_a}, grade={grade}")
-    print("=== END DEBUG INFO ===")
-    
-    # Rest of your original tool code...
-    # (Return error if parameters are still missing)
-    """
-    Query the Neo4j graph database for educational insights.
-    Expects parameters in tool_context.state:
-    - user_intent: "find_highest" or "form_teams" 
-    - topic_a: First topic name
-    - topic_b: Second topic name (for team formation)
-    - grade: Grade level
-    """
-    from neo4j import GraphDatabase, basic_auth
-    import os
+from google.adk.tools import BaseTool
+from google.genai import types
+from sahayak.tools.graph_state import GraphQueryState
+from neo4j import AsyncGraphDatabase
+import logging
+import os
+from typing import Optional
 
-    try:
-        # Get parameters from the tool context
-        params = tool_context.state
-        user_intent = params.get("user_intent")
-        topic_a = params.get("topic_a") 
-        topic_b = params.get("topic_b")
-        grade = params.get("grade")
+logger = logging.getLogger(__name__)
 
-        print(f"DEBUG: Tool received params: intent={user_intent}, topic_a={topic_a}, topic_b={topic_b}, grade={grade}")
-
-        # Validate required parameters
-        if not user_intent:
-            return {"status": "error", "message": "Missing user_intent parameter"}
-
-        driver = GraphDatabase.driver(
-            os.environ["NEO4J_URI"],
-            auth=basic_auth(os.environ["NEO4J_USERNAME"], os.environ["NEO4J_PASSWORD"]),
+class GraphVisualizer(BaseTool):
+    def __init__(self):
+        super().__init__(
+            name="graph_visualizer",
+            description="Executes Neo4j graph queries to analyze student performance."
         )
 
-        if user_intent == "find_highest":
-            if not topic_a:
-                return {"status": "error", "message": "Missing topic_a for highest scorer query"}
+    def run(self, user_intent: str, topic_a: str, grade: Optional[str] = None, topic_b: Optional[str] = None):
+        """
+        Sync wrapper for async Neo4j query execution.
+        """
+        logger.info(f"🔧 GraphVisualizer.run() called with:")
+        logger.info(f"   user_intent={user_intent}")
+        logger.info(f"   topic_a={topic_a}")
+        logger.info(f"   grade={grade}")
+        logger.info(f"   topic_b={topic_b}")
 
-            print(f"DEBUG: Looking for highest scorer in topic: {topic_a}")
+        try:
+            # Build state dict
+            state = {
+                "user_intent": user_intent,
+                "topic_a": topic_a,
+                "grade": grade,
+                "topic_b": topic_b
+            }
+            
+            # Validate state
+            parsed_state = GraphQueryState(**{k: v for k, v in state.items() if v is not None})
+            
+        except Exception as e:
+            error_msg = f"Invalid parameters: {e}"
+            logger.error(error_msg)
+            return types.Content(
+                role="tool",
+                parts=[types.Part(text=error_msg)]
+            )
 
-            if grade:
-                cypher_query = """
-                MATCH (s:Student)-[r:SCORED_IN]->(t:Topic)
-                WHERE toLower(t.name) = toLower($topic_name) AND t.grade = $grade
-                RETURN s.name AS student_name, r.score AS score
-                ORDER BY r.score DESC
-                LIMIT 5
-                """
-                query_params = {"topic_name": topic_a, "grade": grade}
-                print(f"DEBUG: Running grade-specific query with params: {query_params}")
-            else:
-                cypher_query = """
-                MATCH (s:Student)-[r:SCORED_IN]->(t:Topic)
-                WHERE toLower(t.name) = toLower($topic_name)
-                RETURN s.name AS student_name, r.score AS score, t.grade AS grade
-                ORDER BY r.score DESC
-                LIMIT 5
-                """
-                query_params = {"topic_name": topic_a}
-                print(f"DEBUG: Running general query with params: {query_params}")
+        # Since we're in sync context, run the async method in a new event loop
+        import asyncio
+        import nest_asyncio  # ✅ Handle nested event loops
+        
+        try:
+            # Allow nested event loops
+            nest_asyncio.apply()
+            result = asyncio.run(self._run_query(parsed_state))
+            return types.Content(
+                role="tool",
+                parts=[types.Part(text=result)]
+            )
+        except Exception as e:
+            error_msg = f"Query failed: {e}"
+            logger.exception("Neo4j query failed")
+            return types.Content(
+                role="tool",
+                parts=[types.Part(text=error_msg)]
+            )
 
-        elif user_intent == "form_teams":
-            if not topic_a or not topic_b or not grade:
-                return {"status": "error", "message": f"Missing parameters for team formation: topic_a={topic_a}, topic_b={topic_b}, grade={grade}"}
+    async def _run_query(self, parsed_state: GraphQueryState) -> str:
+        """Async method to run Neo4j queries."""
+        logger.info("🚀 Executing Neo4j query...")
+        
+        driver = AsyncGraphDatabase.driver(
+            os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+            auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD")),
+        )
 
-            cypher_query = """
-            MATCH (s:Student)-[r1:SCORED_IN]->(t1:Topic {grade: $grade}),
-                  (s)-[r2:SCORED_IN]->(t2:Topic {grade: $grade})
-            WHERE toLower(t1.name) = toLower($topic_a) 
-              AND toLower(t2.name) = toLower($topic_b)
-            RETURN s.name AS student_name, r1.score AS score_a, r2.score AS score_b
-            ORDER BY s.name
-            LIMIT 20
-            """
-            query_params = {"topic_a": topic_a, "topic_b": topic_b, "grade": grade}
+        try:
+            async with driver.session(database="neo4j") as session:
+                if parsed_state.user_intent == "find_highest":
+                    # ✅ Fixed: Filter by topic.grade instead of student.grade
+                    result = await session.run("""
+                        MATCH (s:Student)-[r:SCORED_IN]->(t:Topic {name: $topic_a, grade: $grade})
+                        RETURN s.name AS student_name, r.score AS score
+                        ORDER BY r.score DESC
+                        LIMIT 1
+                    """, {
+                        "topic_a": parsed_state.topic_a.title(),  # "light" -> "Light"
+                        "grade": parsed_state.grade              # "6" (topic grade)
+                    })
+                    record = await result.single()
+                    if record:
+                        return f"Top student in {parsed_state.topic_a} (Grade {parsed_state.grade}): {record['student_name']} (Score: {record['score']})"
+                    return "No student found for this grade and topic"
 
-        else:
-            return {"status": "error", "message": f"Unknown intent: {user_intent}. Use 'find_highest' or 'form_teams'"}
+                elif parsed_state.user_intent == "form_teams" and parsed_state.topic_b:
+                    # ✅ First validate that both topics exist
+                    topic_check = await session.run("""
+                        MATCH (t:Topic {grade: $grade})
+                        WHERE t.name IN [$topic_a, $topic_b]
+                        RETURN t.name AS topic_name
+                    """, {
+                        "topic_a": parsed_state.topic_a.title(),
+                        "topic_b": parsed_state.topic_b.title(),
+                        "grade": parsed_state.grade
+                    })
+                    existing_topics = []
+                    async for record in topic_check:
+                        existing_topics.append(record["topic_name"])
+                    
+                    logger.info(f"Existing topics: {existing_topics}")
+                    
+                    if len(existing_topics) < 2:
+                        missing = set([parsed_state.topic_a.title(), parsed_state.topic_b.title()]) - set(existing_topics)
+                        return f"Cannot form teams: Topics not found: {', '.join(missing)}"
+                    
+                    # ✅ Check if any students have scores for both topics
+                    debug_result = await session.run("""
+                        MATCH (s:Student)-[r1:SCORED_IN]->(t1:Topic {name: $topic_a, grade: $grade}),
+                              (s)-[r2:SCORED_IN]->(t2:Topic {name: $topic_b, grade: $grade})
+                        RETURN s.name AS student_name, r1.score AS score_a, r2.score AS score_b
+                        ORDER BY (r1.score + r2.score) DESC
+                        LIMIT 4
+                    """, {
+                        "topic_a": parsed_state.topic_a.title(),
+                        "topic_b": parsed_state.topic_b.title(),
+                        "grade": parsed_state.grade
+                    })
+                    students = await debug_result.data()
+                    
+                    if not students:
+                        return f"No students found who have scores for both '{parsed_state.topic_a}' and '{parsed_state.topic_b}' topics"
+                    
+                    teams = []
+                    for i in range(0, len(students), 2):
+                        team = f"Team {i//2 + 1}: {students[i]['student_name']}"
+                        if i + 1 < len(students):
+                            team += f", {students[i+1]['student_name']}"
+                        else:
+                            team += " (solo)"
+                        teams.append(team)
+                    
+                    return f"Teams formed: {', '.join(teams)}"
 
-        with driver.session() as session:
-            records = session.run(cypher_query, query_params)
-            data = [r.data() for r in records]
-
-        print(f"DEBUG: Query returned {len(data)} results")
-        if data:
-            print(f"DEBUG: First few results: {data[:2]}")
-
-        return {
-            "status": "success" if data else "warning",
-            "message": f"Query completed for intent: {user_intent}. Found {len(data)} results.",
-            "results": data,
-            "intent": user_intent
-        }
-
-    except Exception as e:
-        print(f"DEBUG: Tool error: {str(e)}")
-        return {"status": "error", "message": f"Database error: {str(e)}"}
+                else:
+                    return "Unsupported or incomplete intent"
+        except Exception as e:
+            logger.exception("Neo4j query failed")
+            return f"Query execution failed: {e}"
+        finally:
+            await driver.close()
