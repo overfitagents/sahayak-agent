@@ -147,6 +147,7 @@ First, analyze these key state variables:
 - Grade level: {current_grade}
 - Curriculum: {curriculum} 
 - School information: {school_info}
+- Timetable: {timetable}
 
 If user asks for slide generation or content creation, transfer control to `content_creator` agent immediately.
 
