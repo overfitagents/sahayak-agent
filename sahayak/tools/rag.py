@@ -40,7 +40,7 @@ ask_vertex_retrieval = DynamicRagRetrieval(
     description=(
         "Use this tool to retrieve documentation and reference materials for the question from the RAG corpus,"
     ),
-    similarity_top_k=12,
+    similarity_top_k=10,
     vector_distance_threshold=0.6,
 )
 
@@ -66,7 +66,7 @@ def rag_query(
 
         # Configure retrieval parameters
         rag_retrieval_config = rag.RagRetrievalConfig(
-            top_k=20,
+            top_k=10,
             filter=rag.Filter(vector_distance_threshold=0.6),
         )
 
