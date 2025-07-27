@@ -6,7 +6,7 @@ from sahayak.subagents.academia.prompt import ACADEMIA_AGENT_INSTR, STUDENT_PERF
 # Student Performance Analyzer sub-agent (renamed from graph_visualizer for clarity)
 student_performance_analyzer = Agent(
     name="student_performance_analyzer",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-pro",
     description="Analyzes student performance data from Neo4j database, creates study teams, and generates academic statistics.",
     tools=[GraphVisualizer()],
     instruction=STUDENT_PERFORMANCE_ANALYZER_INSTR,
