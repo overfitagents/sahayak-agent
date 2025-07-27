@@ -19,7 +19,7 @@ The system recognizes the multifaceted challenges educators face in managing div
 
 ## Agent Architecture
 
-![Agent Architecture](interactive_images/Screenshot%202025-07-26%20120149.png)
+![Agent Architecture](multiagent.png)
 
 The Sahayak Agent system employs a sophisticated hierarchical multi-agent architecture with the following components:
 
