@@ -67,9 +67,12 @@
     "current_grade": {},
     "curriculum": {},
     "current_lesson_plan":{},
-    "current_whiteboard": {},
+    "current_content_generated": {},
     "current_student_profiles": {},
-    "retrieval_query": ""
+    "retrieval_query": "",
+    "generated_lesson_plans": [],
+    "current_date": "2025-06-15",
+    "slide_contents": {}
 }
 
 
